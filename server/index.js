@@ -78,7 +78,7 @@ app.get('/api/timepiece/cycle-time', async (_req, res) => {
 
 // SPA fallback — must come after API routes
 if (existsSync(distDir)) {
-  app.get('*', (_req, res) => res.sendFile(join(distDir, 'index.html')));
+  app.get('/{*path}', (_req, res) => res.sendFile(join(distDir, 'index.html')));
 }
 
 app.listen(port, () => {
