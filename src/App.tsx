@@ -1,8 +1,8 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Download, RefreshCcw } from 'lucide-react';
 import type { IssueRecord } from './types';
 
-import { fetchCycleTimeData } from './services/api';
+import { fetchCycleTimeData, FetchProgress } from './services/api';
 import { applyFilters, emptyFilters, Filters, getOptions } from './utils/filters';
 import { average, median, round2 } from './utils/transform';
 import { MultiSelect } from './components/MultiSelect';
@@ -38,14 +38,30 @@ function App() {
   const [loading, setLoading] = useState(true);
   const [source, setSource] = useState<'api' | 'mock'>('mock');
   const [error, setError] = useState<string | undefined>();
+  const [progress, setProgress] = useState<FetchProgress | null>(null);
+  const [elapsed, setElapsed] = useState(0);
+  const startTimeRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    if (!loading) return;
+    const id = setInterval(() => {
+      if (startTimeRef.current != null)
+        setElapsed(Math.floor((Date.now() - startTimeRef.current) / 1000));
+    }, 500);
+    return () => clearInterval(id);
+  }, [loading]);
 
   async function loadData() {
     setLoading(true);
-    const result = await fetchCycleTimeData();
+    setProgress(null);
+    setElapsed(0);
+    startTimeRef.current = Date.now();
+    const result = await fetchCycleTimeData((p) => setProgress(p));
     setData(result.data);
     setSource(result.source);
     setError(result.error);
     setLoading(false);
+    setProgress(null);
   }
 
   useEffect(() => { void loadData(); }, []);
@@ -78,35 +94,75 @@ function App() {
         </div>
       </header>
 
-      {source === 'mock' && <div className="warning">{error}</div>}
+      {loading && (
+        <div className="loader-overlay">
+          <div className="loader-card">
+            <div className="loader-bar-wrap"><div className="loader-bar" /></div>
+            <p className="loader-title">Loading Timepiece Data…</p>
+            <div className="loader-count">{progress ? progress.fetched.toLocaleString() : '—'}</div>
+            <p className="loader-label">records fetched</p>
+            <div className="loader-stats">
+              {progress ? (
+                <>
+                  <span className="loader-stat">Page {progress.page}</span>
+                  <span className="loader-sep">·</span>
+                  <span className="loader-stat">{elapsed}s elapsed</span>
+                  <span className="loader-sep">·</span>
+                  <span className="loader-stat">~{Math.round(progress.fetched / Math.max(elapsed, 1)).toLocaleString()} rec/s</span>
+                  {progress.hasMore && progress.avgMsPerPage > 0 && (
+                    <>
+                      <span className="loader-sep">·</span>
+                      <span className="loader-stat">~{Math.ceil(progress.avgMsPerPage / 1000)}s/page avg</span>
+                    </>
+                  )}
+                </>
+              ) : (
+                <span className="loader-stat">Initializing…</span>
+              )}
+            </div>
+            {progress?.hasMore && (
+              <p className="loader-sub">Fetching next page…</p>
+            )}
+            {progress && !progress.hasMore && (
+              <p className="loader-sub">Processing data…</p>
+            )}
+          </div>
+        </div>
+      )}
 
-      <section className="filters">
-        <MultiSelect label="Year" options={options.years} value={filters.years} onChange={(years) => setFilters({ ...filters, years })} />
-        <MultiSelect label="Quarter" options={options.quarters} value={filters.quarters} onChange={(quarters) => setFilters({ ...filters, quarters })} />
-        <MultiSelect label="Month" options={options.months} value={filters.months} onChange={(months) => setFilters({ ...filters, months })} />
-        <MultiSelect label="Team" options={options.teams} value={filters.teams} onChange={(teams) => setFilters({ ...filters, teams })} />
-        <MultiSelect label="Issue Type" options={options.issueTypes} value={filters.issueTypes} onChange={(issueTypes) => setFilters({ ...filters, issueTypes })} />
-      </section>
+      {!loading && (
+        <>
+          {source === 'mock' && <div className="warning">{error}</div>}
 
-      <section className="kpis">
-        <KpiCard title="Avg Cycle Time" value={kpis.avgCycle} />
-        <KpiCard title="Median Cycle Time" value={kpis.medianCycle} />
-        <KpiCard title="Avg Blocked Cycle Time" value={kpis.avgBlocked} />
-        <KpiCard title="Median Blocked Cycle Time" value={kpis.medianBlocked} />
-        <KpiCard title="Blocked Time %" value={kpis.blockedPct} />
-      </section>
+          <section className="filters">
+            <MultiSelect label="Year" options={options.years} value={filters.years} onChange={(years) => setFilters({ ...filters, years })} />
+            <MultiSelect label="Quarter" options={options.quarters} value={filters.quarters} onChange={(quarters) => setFilters({ ...filters, quarters })} />
+            <MultiSelect label="Month" options={options.months} value={filters.months} onChange={(months) => setFilters({ ...filters, months })} />
+            <MultiSelect label="Team" options={options.teams} value={filters.teams} onChange={(teams) => setFilters({ ...filters, teams })} />
+            <MultiSelect label="Issue Type" options={options.issueTypes} value={filters.issueTypes} onChange={(issueTypes) => setFilters({ ...filters, issueTypes })} />
+          </section>
 
-      <section className="grid two">
-        <AverageCycleLine data={filtered} />
-        <MedianCycleLine data={filtered} />
-        <BlockedPctLine data={filtered} />
-        <TeamHealthScatter data={filtered} />
-      </section>
+          <section className="kpis">
+            <KpiCard title="Avg Cycle Time" value={kpis.avgCycle} />
+            <KpiCard title="Median Cycle Time" value={kpis.medianCycle} />
+            <KpiCard title="Avg Blocked Cycle Time" value={kpis.avgBlocked} />
+            <KpiCard title="Median Blocked Cycle Time" value={kpis.medianBlocked} />
+            <KpiCard title="Blocked Time %" value={kpis.blockedPct} />
+          </section>
 
-      <section className="grid two lower">
-        <TeamHeatmap data={filtered} />
-        <BlockedByTeamBar data={filtered} />
-      </section>
+          <section className="grid two">
+            <AverageCycleLine data={filtered} />
+            <MedianCycleLine data={filtered} />
+            <BlockedPctLine data={filtered} />
+            <TeamHealthScatter data={filtered} />
+          </section>
+
+          <section className="grid two lower">
+            <TeamHeatmap data={filtered} />
+            <BlockedByTeamBar data={filtered} />
+          </section>
+        </>
+      )}
     </main>
   );
 }
