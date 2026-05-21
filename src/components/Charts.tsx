@@ -59,8 +59,21 @@ export function BlockedPctLine({ data }: { data: IssueRecord[] }) {
   return <ChartFrame title="Blocked Time % by Months"><ResponsiveContainer><ComposedChart data={buildMonthlyRows(data)}><CartesianGrid strokeDasharray="3 3" /><XAxis dataKey="month" /><YAxis /><Tooltip formatter={(v) => `${Number(v).toFixed(2)}`} /><Line type="monotone" dataKey="blockedTimePct" name="Blocked Time %" strokeWidth={3} dot={false} /></ComposedChart></ResponsiveContainer></ChartFrame>;
 }
 
+type TeamScatterPoint = { team: string; medianCycleTime: number; blockedTimePct: number };
+function TeamScatterTooltip({ active, payload }: { active?: boolean; payload?: Array<{ payload: TeamScatterPoint }> }) {
+  if (!active || !payload?.length) return null;
+  const { team, medianCycleTime, blockedTimePct } = payload[0].payload;
+  return (
+    <div style={{ background: 'white', border: '1px solid #e2e8f0', borderRadius: 8, padding: '8px 12px', fontSize: 13, boxShadow: '0 2px 8px rgb(0 0 0 / 0.1)' }}>
+      <p style={{ margin: '0 0 4px', fontWeight: 600, color: '#263244' }}>{team}</p>
+      <p style={{ margin: '2px 0', color: '#555' }}>Median Cycle Time: {medianCycleTime}</p>
+      <p style={{ margin: '2px 0', color: '#555' }}>Blocked Time %: {blockedTimePct}</p>
+    </div>
+  );
+}
+
 export function TeamHealthScatter({ data }: { data: IssueRecord[] }) {
-  return <ChartFrame title="Team Health: Median Cycle Time vs Blocked Time"><ResponsiveContainer><ScatterChart><CartesianGrid strokeDasharray="3 3" /><XAxis dataKey="medianCycleTime" name="Median Cycle Time" type="number" /><YAxis dataKey="blockedTimePct" name="Blocked Time %" type="number" /><Tooltip cursor={{ strokeDasharray: '3 3' }} /><Scatter name="Teams" data={buildTeamRows(data)} /></ScatterChart></ResponsiveContainer></ChartFrame>;
+  return <ChartFrame title="Team Health: Median Cycle Time vs Blocked Time"><ResponsiveContainer><ScatterChart><CartesianGrid strokeDasharray="3 3" /><XAxis dataKey="medianCycleTime" name="Median Cycle Time" type="number" /><YAxis dataKey="blockedTimePct" name="Blocked Time %" type="number" /><Tooltip cursor={{ strokeDasharray: '3 3' }} content={TeamScatterTooltip} /><Scatter name="Teams" data={buildTeamRows(data)} /></ScatterChart></ResponsiveContainer></ChartFrame>;
 }
 
 export function BlockedByTeamBar({ data }: { data: IssueRecord[] }) {
